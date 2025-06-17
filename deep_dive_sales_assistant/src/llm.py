@@ -9,21 +9,24 @@ from openai import AsyncOpenAI
 from .services.utils import compact_json
 
 
-async def generate(raw_data: Dict) -> Dict[str, any]:
+async def generate(raw_data: Dict, verbose: bool = False) -> Dict[str, any]:
     """
     Generate sales insights using OpenAI o3 model.
 
     Args:
         raw_data: Raw data collected from various APIs
+        verbose: Whether to show detailed logging
 
     Returns:
         Dictionary with formatted insights and citations
     """
-    print("  → Generating AI insights...")
+    if verbose:
+        print("  → Generating AI insights...")
 
     api_key = os.getenv("OPENAI_API_KEY", "")
     if not api_key:
-        print("    ❌ Error: OpenAI API key not configured")
+        if verbose:
+            print("    ❌ Error: OpenAI API key not configured")
         return {"pretty": "Error: OpenAI API key not configured", "citations": []}
 
     client = AsyncOpenAI(api_key=api_key)
@@ -31,9 +34,10 @@ async def generate(raw_data: Dict) -> Dict[str, any]:
     # Prepare the raw data JSON
     raw_json = compact_json(raw_data)
 
-    print(
-        f"    📊 Raw data being sent to AI: {raw_json[:500]}{'...' if len(raw_json) > 500 else ''}"
-    )
+    if verbose:
+        print(
+            f"    📊 Raw data being sent to AI: {raw_json[:500]}{'...' if len(raw_json) > 500 else ''}"
+        )
 
     # Construct the prompt
     system_prompt = "You are a senior FareHarbor AE. Summarise and tailor insights."
@@ -54,15 +58,17 @@ Return strict JSON:
   "citations": [ {{"url": "...", "n": 1}}, … ]
 }}"""
 
-    print(f"    💬 System prompt: {system_prompt}")
-    print(
-        f"    💬 User prompt: {user_prompt[:300]}{'...' if len(user_prompt) > 300 else ''}"
-    )
+    if verbose:
+        print(f"    💬 System prompt: {system_prompt}")
+        print(
+            f"    💬 User prompt: {user_prompt[:300]}{'...' if len(user_prompt) > 300 else ''}"
+        )
 
     try:
         # First try with O3 model
         try:
-            print("    📞 Calling OpenAI API with o3-mini model...")
+            if verbose:
+                print("    📞 Calling OpenAI API with o3-mini model...")
 
             response = await client.chat.completions.create(
                 model="o3-mini",
@@ -76,14 +82,16 @@ Return strict JSON:
                 # Note: o3-mini doesn't support temperature parameter
             )
 
-            print(f"    ✅ OpenAI o3-mini API response received")
+            if verbose:
+                print(f"    ✅ OpenAI o3-mini API response received")
 
         except Exception as o3_error:
             # Fallback to gpt-4-turbo (more reliable than o1-preview)
-            print(
-                f"    ⚠️  O3 model not available, falling back to gpt-4-turbo: {o3_error}"
-            )
-            print("    📞 Calling OpenAI API with gpt-4-turbo model...")
+            if verbose:
+                print(
+                    f"    ⚠️  O3 model not available, falling back to gpt-4-turbo: {o3_error}"
+                )
+                print("    📞 Calling OpenAI API with gpt-4-turbo model...")
 
             response = await client.chat.completions.create(
                 model="gpt-4-turbo",
@@ -95,16 +103,17 @@ Return strict JSON:
                 temperature=0.7,
             )
 
-            print(f"    ✅ OpenAI gpt-4-turbo API response received")
+            if verbose:
+                print(f"    ✅ OpenAI gpt-4-turbo API response received")
 
         # Extract the response content
         content = response.choices[0].message.content
 
         # Check for empty response
         if not content or content.strip() == "":
-            print(f"    ⚠️  Empty response received from OpenAI")
-            # Try one more time with gpt-4o as final fallback
-            print("    📞 Retrying with gpt-4o model...")
+            if verbose:
+                print(f"    ⚠️  Empty response received from OpenAI")
+                print("    📞 Retrying with gpt-4o model...")
 
             response = await client.chat.completions.create(
                 model="gpt-4o",
@@ -117,13 +126,16 @@ Return strict JSON:
             )
 
             content = response.choices[0].message.content
-            print(f"    ✅ OpenAI gpt-4o API response received")
+            if verbose:
+                print(f"    ✅ OpenAI gpt-4o API response received")
 
-        print(f"    🤖 Raw AI response: {content}")
+        if verbose:
+            print(f"    🤖 Raw AI response: {content}")
 
         # Check again for empty content after retries
         if not content or content.strip() == "":
-            print(f"    ❌ Still received empty response after retries")
+            if verbose:
+                print(f"    ❌ Still received empty response after retries")
             return {
                 "pretty": "Error: OpenAI returned empty response after multiple attempts",
                 "citations": [],
@@ -140,7 +152,7 @@ Return strict JSON:
 
         cleaned_content = cleaned_content.strip()
 
-        if cleaned_content != content:
+        if cleaned_content != content and verbose:
             print(f"    🧹 Cleaned markdown from response")
             print(f"    🤖 Cleaned AI response: {cleaned_content}")
 
@@ -148,8 +160,9 @@ Return strict JSON:
         try:
             result = json.loads(cleaned_content)
 
-            print(f"    ✅ Successfully parsed AI response as JSON")
-            print(f"    📝 Parsed result: {json.dumps(result, indent=2)}")
+            if verbose:
+                print(f"    ✅ Successfully parsed AI response as JSON")
+                print(f"    📝 Parsed result: {json.dumps(result, indent=2)}")
 
             # Validate the structure
             if not isinstance(result, dict) or "pretty" not in result:
@@ -165,10 +178,12 @@ Return strict JSON:
 
         except (json.JSONDecodeError, ValueError) as e:
             # If JSON parsing fails, wrap the content as plain text
-            print(f"    ⚠️  Failed to parse AI response as JSON: {e}")
-            print(f"    📝 Returning content as plain text wrapper")
+            if verbose:
+                print(f"    ⚠️  Failed to parse AI response as JSON: {e}")
+                print(f"    📝 Returning content as plain text wrapper")
             return {"pretty": cleaned_content, "citations": []}
 
     except Exception as e:
-        print(f"    ❌ OpenAI generation failed: {e}")
+        if verbose:
+            print(f"    ❌ OpenAI generation failed: {e}")
         return {"pretty": f"Error generating insights: {str(e)}", "citations": []}

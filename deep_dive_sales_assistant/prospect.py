@@ -20,29 +20,33 @@ app = typer.Typer(
 )
 
 
-async def research_company(company_name: str) -> dict:
+async def research_company(company_name: str, verbose: bool = False) -> dict:
     """
     Research a company using all available data sources.
 
     Args:
         company_name: Name of the company to research
+        verbose: Whether to show detailed logging
 
     Returns:
         Combined research data
     """
     print(f"🔍 Researching {company_name}...")
-    print(f"🚀 Starting comprehensive company analysis...")
+    if verbose:
+        print(f"🚀 Starting comprehensive company analysis...")
 
     # Step 1: Resolve company using Google Knowledge Graph
     print("  → Resolving company info...")
-    company_info = await resolver.lookup(company_name)
+    company_info = await resolver.lookup(company_name, verbose=verbose)
 
-    print(f"  ✅ Company resolution complete")
+    if verbose:
+        print(f"  ✅ Company resolution complete")
     domain = company_info.get("domain", "")
-    if domain:
-        print(f"  🌐 Found company domain: {domain}")
-    else:
-        print(f"  ⚠️  No domain found for company")
+    if verbose:
+        if domain:
+            print(f"  🌐 Found company domain: {domain}")
+        else:
+            print(f"  ⚠️  No domain found for company")
 
     # Step 2: Gather additional data in parallel (skip BuiltWith if no domain)
     async def empty_tech_stack():
@@ -52,28 +56,32 @@ async def research_company(company_name: str) -> dict:
 
     if domain:
         print(f"  → Analyzing tech stack for {domain}...")
-        tasks.append(builtwith.lookup(domain))
+        tasks.append(builtwith.lookup(domain, verbose=verbose))
     else:
-        print(f"  → Skipping tech stack analysis (no domain available)...")
+        if verbose:
+            print(f"  → Skipping tech stack analysis (no domain available)...")
         tasks.append(empty_tech_stack())
 
     print("  → Searching for company insights...")
-    tasks.append(sonar.search(company_name, domain))
+    tasks.append(sonar.search(company_name, domain, verbose=verbose))
 
     # Execute tasks in parallel
-    print("  🔄 Running parallel API calls...")
+    if verbose:
+        print("  🔄 Running parallel API calls...")
     tech_stack, sonar_results = await asyncio.gather(*tasks)
 
-    print(f"  ✅ All API calls completed")
-    print(
-        f"  📊 Tech stack found: {len(tech_stack) if isinstance(tech_stack, list) else 0} technologies"
-    )
-    print(
-        f"  📊 Sonar insights: {'✅ Found' if sonar_results.get('answer') else '❌ None'}"
-    )
+    if verbose:
+        print(f"  ✅ All API calls completed")
+        print(
+            f"  📊 Tech stack found: {len(tech_stack) if isinstance(tech_stack, list) else 0} technologies"
+        )
+        print(
+            f"  📊 Sonar insights: {'✅ Found' if sonar_results.get('answer') else '❌ None'}"
+        )
 
     # Step 3: Merge all data
-    print("  → Merging research data...")
+    if verbose:
+        print("  → Merging research data...")
     raw_data = {
         "company": company_name,
         "resolver": company_info,
@@ -82,7 +90,8 @@ async def research_company(company_name: str) -> dict:
         "citations": sonar_results.get("citations", []),
     }
 
-    print(f"  ✅ Data merge complete - ready for AI analysis")
+    if verbose:
+        print(f"  ✅ Data merge complete - ready for AI analysis")
     return raw_data
 
 
@@ -104,17 +113,20 @@ def main(
         print(f"📋 Verbose mode enabled - showing detailed process information")
 
     try:
-        print(f"⏰ Beginning company research process...")
+        if verbose:
+            print(f"⏰ Beginning company research process...")
 
         # Run the async research
-        raw_data = asyncio.run(research_company(company))
+        raw_data = asyncio.run(research_company(company, verbose))
 
-        print(f"🤖 Proceeding to AI-powered insight generation...")
+        if verbose:
+            print(f"🤖 Proceeding to AI-powered insight generation...")
 
         # Step 4: Generate insights using LLM
-        insights = asyncio.run(llm.generate(raw_data))
+        insights = asyncio.run(llm.generate(raw_data, verbose=verbose))
 
-        print(f"✅ AI analysis complete - preparing final report...")
+        if verbose:
+            print(f"✅ AI analysis complete - preparing final report...")
 
         # Step 5: Print results
         print("\n" + "=" * 60)
@@ -133,7 +145,8 @@ def main(
                 print(f"[{n}] {url}")
 
         print("\n" + "=" * 60)
-        print(f"🎉 Deep dive research complete for {company}!")
+        if verbose:
+            print(f"🎉 Deep dive research complete for {company}!")
 
         # Exit successfully
         sys.exit(0)
